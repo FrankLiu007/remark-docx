@@ -30,6 +30,8 @@
   "dependencies": {
     "@unified-latex/unified-latex-util-parse": "1.8.3",
     "docx": "^8.2.0",
+    "katex": "^0.16.23",
+    "mathml2omml": "^0.5.0",
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {

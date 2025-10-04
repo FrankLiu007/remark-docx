@@ -9,14 +9,17 @@ import {
 } from "./mdast-to-docx";
 import { invariant } from "./utils";
 import { parseLatex } from "./latex";
+import { parseLatexOMML } from "./latex-omml";
 
 export type { DocxOptions };
 
-const plugin: Plugin<[DocxOptions?]> = function (opts = {}) {
+const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions = {}) {
   let images: ImageDataMap = {};
 
   this.Compiler = (node) => {
-    return mdastToDocx(node as any, opts, images, parseLatex);
+    // 根据选项选择 LaTeX 解析器
+    const latexParser = opts.useOMML ? parseLatexOMML : parseLatex;
+    return mdastToDocx(node as any, opts, images, latexParser);
   };
 
   return async (node) => {

@@ -115,7 +115,7 @@ type ListInfo = Readonly<{
 /**
  * @internal
  */
-export type LatexParser = (value: string) => MathRun[][];
+export type LatexParser = (value: string) => MathRun[][] | ParagraphChild[][];
 
 type Definition = Record<string, string>;
 type FootnoteDefinition = Readonly<{ children: Paragraph[] }>;
@@ -193,6 +193,11 @@ export interface DocxOptions
    * **You must set** if your markdown includes images. See example for [browser](https://github.com/inokawa/remark-docx/blob/main/stories/playground.stories.tsx) and [Node.js](https://github.com/inokawa/remark-docx/blob/main/src/index.spec.ts).
    */
   imageResolver?: ImageResolver;
+  /**
+   * Use OMML-based LaTeX parser for better math formula compatibility.
+   * When enabled, uses KaTeX → MathML → OMML conversion instead of the default parser.
+   */
+  useOMML?: boolean;
 }
 
 type DocxChild = Paragraph | Table | TableOfContents;
@@ -558,25 +563,43 @@ const buildCode = ({
 };
 
 const buildMath = ({ value }: mdast.Math, ctx: Context): DocxContent[] => {
-  return ctx.latex(value).map(
-    (runs) =>
-      new Paragraph({
-        children: [
-          new Math({
-            children: runs,
-          }),
-        ],
-      }),
-  );
+  const result = ctx.latex(value);
+  
+  // 检查是否使用 OMML 解析器（返回 ParagraphChild[][]）
+  if (result.length > 0 && result[0] && result[0].length > 0 && result[0][0] && 'type' in result[0][0]) {
+    // OMML 解析器返回的是 ParagraphChild[][]，直接转换为段落
+    return result.map(children => new Paragraph({ children }));
+  } else {
+    // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
+    return result.map(
+      (runs) =>
+        new Paragraph({
+          children: [
+            new Math({
+              children: runs as MathRun[],
+            }),
+          ],
+        }),
+    );
+  }
 };
 
 const buildInlineMath = (
   { value }: mdast.InlineMath,
   ctx: Context,
 ): DocxContent => {
-  return new Math({
-    children: ctx.latex(value).flatMap((runs) => runs),
-  });
+  const result = ctx.latex(value);
+  
+  // 检查是否使用 OMML 解析器（返回 ParagraphChild[][]）
+  if (result.length > 0 && result[0] && result[0].length > 0 && result[0][0] && 'type' in result[0][0]) {
+    // OMML 解析器返回的是 ParagraphChild[][]，直接返回第一个元素
+    return result[0][0] as DocxContent;
+  } else {
+    // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
+    return new Math({
+      children: result.flatMap((runs) => runs as MathRun[]),
+    });
+  }
 };
 
 const buildText = (text: string, deco: Decoration): DocxContent => {
