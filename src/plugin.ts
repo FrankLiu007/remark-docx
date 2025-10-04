@@ -10,11 +10,38 @@ import {
 import { invariant } from "./utils";
 import { parseLatex } from "./latex";
 import { parseLatexOMML } from "./latex-omml";
+import { preprocessMathFormulas } from "./mathPreprocessor";
 
 export type { DocxOptions };
 
 const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions = {}) {
   let images: ImageDataMap = {};
+
+  // 添加预处理步骤，将 LaTeX 格式的数学公式转换为 remark-math 支持的格式
+  this.use(function() {
+    return (tree: mdast.Root) => {
+      // 遍历所有文本节点，预处理数学公式
+      visit(tree, 'text', (node: mdast.Text) => {
+        if (node.value) {
+          node.value = preprocessMathFormulas(node.value);
+        }
+      });
+      
+      // 处理代码块中的数学公式（如果需要）
+      visit(tree, 'code', (node: mdast.Code) => {
+        if (node.value) {
+          node.value = preprocessMathFormulas(node.value);
+        }
+      });
+      
+      // 处理 HTML 节点中的数学公式（如果需要）
+      visit(tree, 'html', (node: mdast.HTML) => {
+        if (node.value) {
+          node.value = preprocessMathFormulas(node.value);
+        }
+      });
+    };
+  });
 
   this.Compiler = (node) => {
     // 根据选项选择 LaTeX 解析器
