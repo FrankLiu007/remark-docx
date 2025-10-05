@@ -191,7 +191,7 @@ function detectLatexDisplayMath(text: string, startPos: number): MathFormula | n
       if (latex.trim()) {
         return {
           fullMatch: text.substring(startPos, i + 2),
-          latex: latex.trim(),
+          latex: latex, // 保持原始格式，不移除换行符
           startIndex: startPos,
           endIndex: i + 2,
           type: 'inline' // 统一使用 inline 类型

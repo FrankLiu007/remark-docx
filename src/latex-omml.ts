@@ -1,4 +1,4 @@
-import { ParagraphChild, ImportedXmlComponent } from "docx";
+import { ParagraphChild, ImportedXmlComponent, TextRun } from "docx";
 import { mml2omml } from "mathml2omml";
 import katex from "katex";
 
@@ -157,14 +157,14 @@ function buildDocxElementFromOMML(omml: string): ParagraphChild | null {
       displayText = '[数学公式转换失败]';
     }
     
-    return {
-      type: 'textRun',
+    // 返回一个正确的 TextRun 对象而不是包含 type 属性的对象
+    return new TextRun({
       text: displayText,
       font: 'Cambria Math',
       size: 22,
       italics: true,
-      color: 'red'
-    } as unknown as ParagraphChild;
+      color: 'FF0000'
+    }) as unknown as ParagraphChild;
     
   } catch (err) {
     console.warn('Failed to create Math element from OMML:', err);
@@ -188,27 +188,25 @@ export function parseLatexOMML(value: string): ParagraphChild[][] {
     const omml = convertLatexToOMML(value, isDisplayMode);
     if (!omml) {
       // 转换失败，返回错误文本
-      return [[{
-        type: 'textRun',
+      return [[new TextRun({
         text: `[LaTeX: ${value}]`,
         font: 'Courier New',
         size: 22,
-        color: 'red',
+        color: 'FF0000',
         italics: true
-      } as unknown as ParagraphChild]];
+      }) as unknown as ParagraphChild]];
     }
     
     // 将 OMML 转换为 docx 元素
     const mathElement = buildDocxElementFromOMML(omml);
     if (!mathElement) {
-      return [[{
-        type: 'textRun',
+      return [[new TextRun({
         text: `[LaTeX: ${value}]`,
         font: 'Courier New',
         size: 22,
-        color: 'red',
+        color: 'FF0000',
         italics: true
-      } as unknown as ParagraphChild]];
+      }) as unknown as ParagraphChild]];
     }
     
     // 返回格式化的结果，每个段落包含一个数学元素
@@ -216,13 +214,12 @@ export function parseLatexOMML(value: string): ParagraphChild[][] {
     
   } catch (error) {
     console.error('OMML LaTeX parsing failed:', error);
-    return [[{
-      type: 'textRun',
+    return [[new TextRun({
       text: `[LaTeX Error: ${value}]`,
       font: 'Courier New',
       size: 22,
-      color: 'red',
+      color: 'FF0000',
       italics: true
-    } as unknown as ParagraphChild]];
+    }) as unknown as ParagraphChild]];
   }
 }

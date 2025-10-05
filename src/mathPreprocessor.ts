@@ -26,13 +26,15 @@ export function preprocessMathFormulas(text: string): string {
     return text;
   }
 
-  // 分割文本为公式和非公式部分
+  // 分割文本为公式和非公式部分 - 这种方法更清晰易懂
   const segments = splitTextWithMathFormulas(text);
   
   // 构建预处理后的文本
   let processedText = '';
   
-  for (const segment of segments) {
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    
     if (segment.type === 'text') {
       // 普通文本，直接添加
       processedText += segment.content;
@@ -44,11 +46,58 @@ export function preprocessMathFormulas(text: string): string {
         // LaTeX 行内公式 \(...\) → $...$
         processedText += `$${formula.latex}$`;
       } else if (formula.fullMatch.startsWith('\\[') && formula.fullMatch.endsWith('\\]')) {
-        // LaTeX 块级公式 \[...\] → $$...$$
-        processedText += `$$${formula.latex}$$`;
-      } else {
-        // 其他格式（$...$ 或 $$...$$），保持原样
-        processedText += segment.content;
+        // LaTeX 块级公式 \[...\] → 根据内容决定使用 $ 还是 $$
+        const trimmedLatex = formula.latex.trim();
+        
+        // 检查是否包含换行符，如果有则使用 $$ 格式，否则使用 $ 格式
+        if (trimmedLatex.includes('\n')) {
+          // 跨行公式，使用 $$ 格式
+          // 检查前面是否需要添加空行
+          const needsLeadingNewline = processedText.length > 0 && 
+            !processedText.endsWith('\n');
+          
+          // 添加前置空行
+          if (needsLeadingNewline) {
+            processedText += '\n';
+          }
+          
+          processedText += `$$\n${trimmedLatex}\n$$`;
+          
+          // 添加后置空行（确保公式后有空行）
+          processedText += '\n';
+        } else {
+          // 单行公式，使用 $ 格式
+          processedText += `$${trimmedLatex}$`;
+        }
+      } else if (formula.fullMatch.startsWith('$$') && formula.fullMatch.endsWith('$$')) {
+        // 处理 $$...$$ 格式，根据内容决定使用 $ 还是 $$
+        const trimmedLatex = formula.latex.trim();
+        
+        // 检查是否包含换行符，如果有则使用 $$ 格式，否则使用 $ 格式
+        if (trimmedLatex.includes('\n')) {
+          // 跨行公式，使用 $$ 格式
+          // 检查前面是否需要添加空行
+          const needsLeadingNewline = processedText.length > 0 && 
+            !processedText.endsWith('\n');
+          
+          // 添加前置空行
+          if (needsLeadingNewline) {
+            processedText += '\n';
+          }
+          
+          processedText += `$$\n${trimmedLatex}\n$$`;
+          
+          // 添加后置空行（确保公式后有空行）
+          processedText += '\n';
+        } else {
+          // 单行公式，使用 $ 格式
+          processedText += `$${trimmedLatex}$`;
+        }
+      }
+      else {
+        // 其他格式，检查是否需要格式化
+          // $...$ 格式，保持原样
+          processedText += segment.content;        
       }
     }
   }

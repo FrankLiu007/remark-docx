@@ -11,6 +11,7 @@ import { invariant } from "./utils";
 import { parseLatex } from "./latex";
 import { parseLatexOMML } from "./latex-omml";
 import { preprocessMathFormulas } from "./mathPreprocessor";
+import math from "remark-math";
 
 export type { DocxOptions };
 
@@ -42,6 +43,9 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
       });
     };
   });
+
+  // 确保 remark-math 正确配置以识别数学公式
+  // this.use(math, { singleDollarTextMath: true });
 
   this.Compiler = (node) => {
     // 根据选项选择 LaTeX 解析器
