@@ -565,23 +565,41 @@ const buildCode = ({
 const buildMath = ({ value }: mdast.Math, ctx: Context): DocxContent[] => {
   const result = ctx.latex(value);
   
-  // 检查是否使用 OMML 解析器（返回 ParagraphChild[][]）
-  if (result.length > 0 && result[0] && result[0].length > 0 && result[0][0] && 'type' in result[0][0]) {
-    // OMML 解析器返回的是 ParagraphChild[][]，直接转换为段落
-    return result.map(children => new Paragraph({ children }));
-  } else {
-    // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
-    return result.map(
-      (runs) =>
-        new Paragraph({
-          children: [
-            new Math({
-              children: runs as MathRun[],
-            }),
-          ],
-        }),
-    );
+  // 检查是否使用 OMML 解析器
+  // OMML 解析器返回的是 ParagraphChild[][]（ImportedXmlComponent 或 Math 元素）
+  // 原始解析器返回的是 MathRun[][]
+  if (result.length > 0 && result[0] && result[0].length > 0) {
+    const firstElement = result[0][0];
+    
+    // 检查是否为 OMML 生成的元素：
+    // 1. ImportedXmlComponent 元素（正确的 OMML 解析方法）
+    // 2. 有 type: 'textRun' 的错误文本（OMML 解析失败时的回退）
+    if (firstElement && typeof firstElement === 'object') {
+      // 检查是否为 ImportedXmlComponent（只有这个检查是可靠的）
+      if (firstElement.constructor?.name === 'ImportedXmlComponent') {
+        return result.map(children => new Paragraph({ children }));
+      }
+      
+      // 检查是否为 OMML 解析失败时的错误文本
+      if ('type' in firstElement && firstElement.type === 'textRun' && 
+          'text' in firstElement && typeof firstElement.text === 'string' &&
+          (firstElement.text.includes('[LaTeX:') || firstElement.text.includes('[LaTeX Error:'))) {
+        return result.map(children => new Paragraph({ children }));
+      }
+    }
   }
+  
+  // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
+  return result.map(
+    (runs) =>
+      new Paragraph({
+        children: [
+          new Math({
+            children: runs as MathRun[],
+          }),
+        ],
+      }),
+  );
 };
 
 const buildInlineMath = (
@@ -590,16 +608,34 @@ const buildInlineMath = (
 ): DocxContent => {
   const result = ctx.latex(value);
   
-  // 检查是否使用 OMML 解析器（返回 ParagraphChild[][]）
-  if (result.length > 0 && result[0] && result[0].length > 0 && result[0][0] && 'type' in result[0][0]) {
-    // OMML 解析器返回的是 ParagraphChild[][]，直接返回第一个元素
-    return result[0][0] as DocxContent;
-  } else {
-    // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
-    return new Math({
-      children: result.flatMap((runs) => runs as MathRun[]),
-    });
+  // 检查是否使用 OMML 解析器
+  // OMML 解析器返回的是 ParagraphChild[][]（ImportedXmlComponent 或 Math 元素）
+  // 原始解析器返回的是 MathRun[][]
+  if (result.length > 0 && result[0] && result[0].length > 0) {
+    const firstElement = result[0][0];
+    
+    // 检查是否为 OMML 生成的元素：
+    // 1. ImportedXmlComponent 元素（正确的 OMML 解析方法）
+    // 2. 有 type: 'textRun' 的错误文本（OMML 解析失败时的回退）
+    if (firstElement && typeof firstElement === 'object') {
+      // 检查是否为 ImportedXmlComponent（只有这个检查是可靠的）
+      if (firstElement.constructor?.name === 'ImportedXmlComponent') {
+        return result[0][0] as DocxContent;
+      }
+      
+      // 检查是否为 OMML 解析失败时的错误文本
+      if ('type' in firstElement && firstElement.type === 'textRun' && 
+          'text' in firstElement && typeof firstElement.text === 'string' &&
+          (firstElement.text.includes('[LaTeX:') || firstElement.text.includes('[LaTeX Error:'))) {
+        return result[0][0] as DocxContent;
+      }
+    }
   }
+  
+  // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
+  return new Math({
+    children: result.flatMap((runs) => runs as MathRun[]),
+  });
 };
 
 const buildText = (text: string, deco: Decoration): DocxContent => {

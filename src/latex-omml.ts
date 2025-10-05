@@ -51,7 +51,24 @@ function latexToMathML(latex: string, displayMode: boolean = false): string | nu
 function mathMLtoOMML(mathml: string): string | null {
   try {
     const omml = mml2omml(mathml, { disableDecode: true });
-    return omml || null;
+    if (!omml) {
+      return null;
+    }
+    
+    // 确保 OMML 结构正确，避免嵌套的 m:oMath 元素
+    let cleanOmml = omml.trim();
+    
+    // 如果 OMML 已经包含完整的 m:oMath 结构，直接返回
+    if (cleanOmml.startsWith('<m:oMath') && cleanOmml.endsWith('</m:oMath>')) {
+      return cleanOmml;
+    }
+    
+    // 如果 OMML 不包含 m:oMath 包装，添加它
+    if (!cleanOmml.includes('<m:oMath')) {
+      cleanOmml = `<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${cleanOmml}</m:oMath>`;
+    }
+    
+    return cleanOmml;
   } catch (error) {
     console.warn('MathML to OMML conversion failed:', error);
     return null;
@@ -60,6 +77,7 @@ function mathMLtoOMML(mathml: string): string | null {
 
 /**
  * 将 OMML 转换为 docx Math 元素
+ * 使用正确的方法避免嵌套问题
  */
 function convertOmml2Math(ommlString: string): ParagraphChild | null {
   try {
@@ -70,7 +88,10 @@ function convertOmml2Math(ommlString: string): ParagraphChild | null {
       throw new Error('识别到的 rootKey 不是 m:oMath 或 m:oMathPara');
     }
     
+    // 使用 ImportedXmlComponent 正确解析 OMML XML
     const result = ImportedXmlComponent.fromXmlString(xmlString);
+    
+    // 返回根元素，这应该是一个正确的 Math 元素
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (result as any).root[0];
   } catch (error) {
