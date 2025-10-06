@@ -4,7 +4,7 @@
   import remarkParse from 'remark-parse';
   import remarkMath from 'remark-math';
   import remarkGfm from 'remark-gfm';
-  import remarkDocx, { preprocessMathFormulas } from 'remark-docx';
+  import { remarkDocx, preprocessMathFormulas } from 'remark-docx';
   
   // 响应式状态
   let markdownInput = '';

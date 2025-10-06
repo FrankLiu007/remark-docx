@@ -109,4 +109,5 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
     return node;
   };
 };
+export const remarkDocx = plugin;
 export default plugin;

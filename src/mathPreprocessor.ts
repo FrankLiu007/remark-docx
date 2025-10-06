@@ -35,6 +35,8 @@ export function preprocessMathFormulas(text: string): string {
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
     
+    if (!segment) continue;
+    
     if (segment.type === 'text') {
       // 普通文本，直接添加
       processedText += segment.content;
@@ -96,8 +98,8 @@ export function preprocessMathFormulas(text: string): string {
       }
       else {
         // 其他格式，检查是否需要格式化
-          // $...$ 格式，保持原样
-          processedText += segment.content;        
+        // $...$ 格式，保持原样
+        processedText += segment.content;        
       }
     }
   }
