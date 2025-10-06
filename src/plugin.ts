@@ -9,9 +9,8 @@ import {
 } from "./mdast-to-docx";
 import { invariant } from "./utils";
 import { parseLatex } from "./latex";
-import { parseLatexOMML } from "./latex-omml";
+import { parseLatexOMMLWithXSL, parseLatexOMMLWithLibrary } from "./latex-omml";
 import { preprocessMathFormulas } from "./mathPreprocessor";
-import math from "remark-math";
 
 export type { DocxOptions };
 
@@ -49,7 +48,22 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
 
   this.Compiler = (node) => {
     // 根据选项选择 LaTeX 解析器
-    const latexParser = opts.useOMML ? parseLatexOMML : parseLatex;
+    let latexParser;
+    if (opts.useOMML) {
+      if (opts.useBrowserXSL) {
+        // 使用真正的浏览器原生 XSL 转换（同步）
+        latexParser = parseLatexOMMLWithXSL;
+
+      } else {
+        // 使用 mathml2omml 库
+        latexParser = parseLatexOMMLWithLibrary;
+
+      }
+    } else {
+      // 使用原始解析器
+      latexParser = parseLatex;
+    }
+    
     return mdastToDocx(node as any, opts, images, latexParser);
   };
 

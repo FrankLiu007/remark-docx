@@ -19,23 +19,33 @@
   "sideEffects": false,
   "scripts": {
     "build": "rollup -c",
+    "build:dist": "rollup -c rollup.dist.config.mjs",
     "test": "vitest run",
     "tsc": "tsc -p . --noEmit",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
     "storybook:test": "concurrently -k -s first -n \"SB,TEST\" -c \"magenta,blue\" \"npm run storybook -- --no-open\" \"wait-on tcp:6006 && test-storybook\"",
     "typedoc": "typedoc",
-    "prepublishOnly": "npm run typedoc && rimraf lib && npm run build"
+    "prepublishOnly": "npm run typedoc && rimraf lib && npm run build",
+    "dev": "npm run build:dist && npm run copy:test && npx http-server dist -p 8080 -o",
+    "copy:test": "node scripts/copy-test-files.js"
   },
   "dependencies": {
     "@unified-latex/unified-latex-util-parse": "1.8.3",
+    "@xmldom/xmldom": "^0.8.11",
     "docx": "^8.2.0",
+    "jsdom": "^27.0.0",
     "katex": "^0.16.23",
     "mathml2omml": "^0.5.0",
-    "unist-util-visit": "^5.0.0"
+    "unist-util-visit": "^5.0.0",
+    "xslt-processor": "^3.3.1"
   },
   "devDependencies": {
     "@prettier/plugin-xml": "^3.4.1",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.2",
+    "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^11.1.6",
     "@storybook/react-vite": "^9.0.15",
     "@storybook/test-runner": "^0.23.0",

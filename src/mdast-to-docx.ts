@@ -198,6 +198,12 @@ export interface DocxOptions
    * When enabled, uses KaTeX → MathML → OMML conversion instead of the default parser.
    */
   useOMML?: boolean;
+  /**
+   * Use browser native XSLTProcessor for MathML to OMML conversion.
+   * When true, uses async XSL conversion; when false, uses mathml2omml library.
+   * Only applies when useOMML is true.
+   */
+  useBrowserXSL?: boolean;
 }
 
 type DocxChild = Paragraph | Table | TableOfContents;
