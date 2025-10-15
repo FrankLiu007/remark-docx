@@ -1,2 +1,4 @@
 lib
 node_modules
+src/__snapshots__
+example/*.docx

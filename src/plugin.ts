@@ -46,6 +46,7 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
   // 确保 remark-math 正确配置以识别数学公式
   // this.use(math, { singleDollarTextMath: true });
 
+  // 设置编译器
   this.Compiler = (node) => {
     // 根据选项选择 LaTeX 解析器
     let latexParser;
@@ -67,6 +68,7 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
     return mdastToDocx(node as any, opts, images, latexParser);
   };
 
+  // 返回图片处理转换器
   return async (node) => {
     const imageList: (mdast.Image | mdast.Definition)[] = [];
     visit(node as mdast.Root, "image", (node) => {

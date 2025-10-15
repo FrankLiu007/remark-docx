@@ -559,6 +559,315 @@ ${comparisonResults.browserNative ? '📈 比较结果已更新，可以查看�
       showResult(`❌ 比较转换方法失败: ${error.message}`, 'error');
     }
   }
+
+  // 调试 w:oMath 重复包装问题
+  async function debugOMathWrapping() {
+    if (!markdownInput.trim()) {
+      showResult('❌ 请输入 Markdown 内容', 'error');
+      return;
+    }
+
+    try {
+      isLoading = true;
+      showResult('🔍 开始调试 w:oMath 重复包装问题...', 'loading');
+
+      // 1. 预处理数学公式
+      console.log('=== 步骤 1: 预处理数学公式 ===');
+      const preprocessedContent = preprocessMathFormulas(markdownInput);
+      console.log('预处理后的内容:', preprocessedContent);
+
+      // 2. 提取数学公式并转换为 MathML
+      console.log('=== 步骤 2: 提取数学公式 ===');
+      const mathMatches = preprocessedContent.match(/\$([^$]+)\$/g);
+      const blockMathMatches = preprocessedContent.match(/\$\$([\s\S]*?)\$\$/g);
+      
+      let allMathFormulas = [];
+      if (mathMatches) {
+        allMathFormulas = allMathFormulas.concat(mathMatches.map(match => match.slice(1, -1)));
+      }
+      if (blockMathMatches) {
+        allMathFormulas = allMathFormulas.concat(blockMathMatches.map(match => match.slice(2, -2)));
+      }
+      
+      console.log('发现的数学公式:', allMathFormulas);
+
+      // 3. 使用 KaTeX 转换为 MathML
+      console.log('=== 步骤 3: KaTeX → MathML 转换 ===');
+      const katex = await import('katex');
+      const mathmlResults = [];
+      
+      for (let i = 0; i < allMathFormulas.length; i++) {
+        const latex = allMathFormulas[i];
+        console.log(`转换公式 ${i + 1}: ${latex}`);
+        
+        const mathml = katex.default.renderToString(latex, {
+          throwOnError: false,
+          output: 'mathml'
+        });
+        
+        const mathmlMatch = mathml.match(/<math[\s\S]*?<\/math>/i);
+        if (mathmlMatch) {
+          const mathmlContent = mathmlMatch[0];
+          console.log(`MathML ${i + 1}:`, mathmlContent);
+          mathmlResults.push({ latex, mathml: mathmlContent });
+        }
+      }
+
+      // 4. 创建处理器并处理
+      console.log('=== 步骤 4: 创建处理器 ===');
+      const processor = unified()
+        .use(remarkParse)
+        .use(remarkMath)
+        .use(remarkGfm)
+        .use(remarkDocx, {
+          output: 'blob',
+          useOMML: true,
+          useBrowserXSL: true,
+          debugMode: true,
+          imageResolver: async (url) => {
+            return {
+              data: new Uint8Array(0),
+              width: 100,
+              height: 100
+            };
+          }
+        });
+
+      // 5. 处理 markdown
+      console.log('=== 步骤 5: 处理 markdown ===');
+      const processedResult = await processor.process(preprocessedContent);
+      const docxBlob = await processedResult.result;
+
+      // 6. 分析 DOCX 结构
+      console.log('=== 步骤 6: 分析 DOCX 结构 ===');
+      const analysisResult = await analyzeDocxStructure(docxBlob);
+      
+      // 7. 生成详细的调试报告
+      let debugReport = `🔍 w:oMath 重复包装详细调试报告\n\n`;
+      debugReport += `📝 原始 Markdown 长度: ${markdownInput.length} 字符\n`;
+      debugReport += `🔧 预处理后长度: ${preprocessedContent.length} 字符\n`;
+      debugReport += `🧮 发现数学公式数量: ${allMathFormulas.length}\n`;
+      debugReport += `📄 生成的 DOCX 大小: ${(docxBlob.size / 1024).toFixed(2)} KB\n\n`;
+      
+      // 显示每个数学公式的转换过程
+      debugReport += `📋 数学公式转换过程:\n`;
+      mathmlResults.forEach((result, index) => {
+        debugReport += `  ${index + 1}. LaTeX: ${result.latex}\n`;
+        debugReport += `     MathML 长度: ${result.mathml.length} 字符\n`;
+      });
+      debugReport += `\n`;
+      
+      if (analysisResult) {
+        debugReport += `🧮 w:oMath 元素分析:\n`;
+        debugReport += `  • 总数量: ${analysisResult.totalOMathElements}\n`;
+        debugReport += `  • 是否有嵌套: ${analysisResult.hasNestedOMath ? '❌ 是' : '✅ 否'}\n\n`;
+        
+        if (analysisResult.hasNestedOMath) {
+          debugReport += `⚠️ 发现问题: 存在嵌套的 w:oMath 元素!\n`;
+          debugReport += `📋 可能的原因:\n`;
+          debugReport += `  1. MathML → OMML 转换时重复包装\n`;
+          debugReport += `  2. OMML 嵌入 DOCX 时再次包装\n`;
+          debugReport += `  3. 模板或样式重复应用\n\n`;
+          
+          debugReport += `🔍 建议检查点:\n`;
+          debugReport += `  • remark-docx 中的 MathML 处理逻辑\n`;
+          debugReport += `  • XSL 转换模板\n`;
+          debugReport += `  • DOCX 文档结构生成\n\n`;
+        } else {
+          debugReport += `✅ 未发现 w:oMath 嵌套问题\n`;
+          debugReport += `💡 问题可能在其他地方，请检查生成的 DOCX 文件\n\n`;
+        }
+        
+        debugReport += `📊 详细信息已输出到浏览器控制台\n`;
+        debugReport += `💡 请打开开发者工具查看完整的调试信息`;
+      } else {
+        debugReport += `❌ 无法分析 DOCX 结构\n`;
+        debugReport += `📊 请检查浏览器控制台获取更多信息`;
+      }
+
+      showResult(debugReport, analysisResult?.hasNestedOMath ? 'error' : 'success');
+
+    } catch (err) {
+      console.error('调试过程中出错:', err);
+      showResult(`❌ 调试失败: ${err.message}\n\n错误详情:\n${err.stack || err.toString()}`, 'error');
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  // 分析 DOCX 结构的辅助函数
+  async function analyzeDocxStructure(blob) {
+    try {
+      // 使用 JSZip 解压 DOCX 文件
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      const zipContent = await zip.loadAsync(blob);
+      
+      // 读取 document.xml
+      const documentXml = await zipContent.file('word/document.xml')?.async('text');
+      if (documentXml) {
+        console.log('=== DOCX document.xml 内容 ===');
+        console.log(documentXml);
+        
+        // 分析 w:oMath 元素
+        const omathMatches = documentXml.match(/<w:oMath[\s\S]*?<\/w:oMath>/g);
+        if (omathMatches) {
+          console.log('=== 发现的 w:oMath 元素 ===');
+          omathMatches.forEach((match, index) => {
+            console.log(`w:oMath ${index + 1}:`, match);
+            
+            // 检查是否有嵌套的 w:oMath
+            const nestedOMath = match.match(/<w:oMath[\s\S]*?<w:oMath/);
+            if (nestedOMath) {
+              console.log('⚠️ 发现嵌套的 w:oMath 元素!');
+              console.log('嵌套位置:', nestedOMath);
+              
+              // 进一步分析嵌套结构
+              const nestedCount = (match.match(/<w:oMath/g) || []).length;
+              console.log(`嵌套层级: ${nestedCount} 层`);
+            }
+          });
+          
+          return {
+            totalOMathElements: omathMatches.length,
+            hasNestedOMath: omathMatches.some(match => match.match(/<w:oMath[\s\S]*?<w:oMath/)),
+            omathElements: omathMatches,
+            nestedCounts: omathMatches.map(match => (match.match(/<w:oMath/g) || []).length)
+          };
+        } else {
+          console.log('未发现 w:oMath 元素');
+          return { totalOMathElements: 0, hasNestedOMath: false, omathElements: [], nestedCounts: [] };
+        }
+      } else {
+        console.log('无法读取 document.xml');
+        return null;
+      }
+    } catch (error) {
+      console.error('分析 DOCX 结构时出错:', error);
+      return null;
+    }
+  }
+
+  // 测试单个数学公式的转换过程
+  async function testSingleFormula() {
+    if (!markdownInput.trim()) {
+      showResult('❌ 请输入 Markdown 内容', 'error');
+      return;
+    }
+
+    try {
+      isLoading = true;
+      showResult('🧪 开始测试单个数学公式转换过程...', 'loading');
+
+      // 1. 提取第一个数学公式
+      const mathMatch = markdownInput.match(/\$([^$]+)\$/);
+      if (!mathMatch) {
+        showResult('❌ 未找到行内数学公式 ($...$)，请确保输入包含数学公式', 'error');
+        return;
+      }
+
+      const latex = mathMatch[1];
+      console.log('=== 测试公式 ===');
+      console.log('LaTeX:', latex);
+
+      // 2. 创建简单的测试 Markdown
+      const testMarkdown = `# 测试文档\n\n这是一个测试公式：$${latex}$\n\n结束。`;
+      console.log('测试 Markdown:', testMarkdown);
+
+      // 3. 预处理
+      const preprocessedContent = preprocessMathFormulas(testMarkdown);
+      console.log('预处理后:', preprocessedContent);
+
+      // 4. 使用 KaTeX 转换为 MathML
+      const katex = await import('katex');
+      const mathml = katex.default.renderToString(latex, {
+        throwOnError: false,
+        output: 'mathml'
+      });
+      
+      const mathmlMatch = mathml.match(/<math[\s\S]*?<\/math>/i);
+      const mathmlContent = mathmlMatch ? mathmlMatch[0] : '';
+      console.log('=== MathML 转换结果 ===');
+      console.log('完整输出:', mathml);
+      console.log('提取的 MathML:', mathmlContent);
+
+      // 5. 创建处理器并处理
+      const processor = unified()
+        .use(remarkParse)
+        .use(remarkMath)
+        .use(remarkGfm)
+        .use(remarkDocx, {
+          output: 'blob',
+          useOMML: true,
+          useBrowserXSL: true,
+          debugMode: true,
+          imageResolver: async (url) => {
+            return {
+              data: new Uint8Array(0),
+              width: 100,
+              height: 100
+            };
+          }
+        });
+
+      console.log('=== 开始处理 Markdown ===');
+      const processedResult = await processor.process(preprocessedContent);
+      const docxBlob = await processedResult.result;
+
+      // 6. 分析结果
+      console.log('=== 分析生成的 DOCX ===');
+      const analysisResult = await analyzeDocxStructure(docxBlob);
+
+      // 7. 生成测试报告
+      let testReport = `🧪 单个公式转换测试报告\n\n`;
+      testReport += `📝 测试公式: ${latex}\n`;
+      testReport += `📏 MathML 长度: ${mathmlContent.length} 字符\n`;
+      testReport += `📄 生成的 DOCX 大小: ${(docxBlob.size / 1024).toFixed(2)} KB\n\n`;
+      
+      if (analysisResult) {
+        testReport += `🔍 分析结果:\n`;
+        testReport += `  • w:oMath 元素数量: ${analysisResult.totalOMathElements}\n`;
+        testReport += `  • 是否有嵌套: ${analysisResult.hasNestedOMath ? '❌ 是' : '✅ 否'}\n\n`;
+        
+        if (analysisResult.hasNestedOMath) {
+          testReport += `⚠️ 发现嵌套问题!\n`;
+          testReport += `📊 嵌套层级统计:\n`;
+          analysisResult.nestedCounts.forEach((count, index) => {
+            testReport += `  • 元素 ${index + 1}: ${count} 层嵌套\n`;
+          });
+          testReport += `\n`;
+          
+          testReport += `🔍 第一个嵌套元素预览:\n`;
+          const firstNested = analysisResult.omathElements.find(match => 
+            match.match(/<w:oMath[\s\S]*?<w:oMath/)
+          );
+          if (firstNested) {
+            testReport += `\`\`\`xml\n${firstNested.substring(0, 500)}...\n\`\`\`\n\n`;
+          }
+        } else {
+          testReport += `✅ 未发现嵌套问题\n\n`;
+        }
+        
+        testReport += `📋 所有 w:oMath 元素:\n`;
+        analysisResult.omathElements.forEach((element, index) => {
+          testReport += `  ${index + 1}. 长度: ${element.length} 字符\n`;
+        });
+      } else {
+        testReport += `❌ 无法分析 DOCX 结构\n`;
+      }
+
+      testReport += `\n📊 详细信息已输出到浏览器控制台\n`;
+      testReport += `💡 请打开开发者工具查看完整的调试信息`;
+
+      showResult(testReport, analysisResult?.hasNestedOMath ? 'error' : 'success');
+
+    } catch (err) {
+      console.error('测试过程中出错:', err);
+      showResult(`❌ 测试失败: ${err.message}\n\n错误详情:\n${err.stack || err.toString()}`, 'error');
+    } finally {
+      isLoading = false;
+    }
+  }
 </script>
 
 <div class="grid">
@@ -623,6 +932,22 @@ ${comparisonResults.browserNative ? '📈 比较结果已更新，可以查看�
             class="comparison-btn compare-methods"
           >
             🔬 比较转换方法
+          </button>
+          
+          <button 
+            on:click={debugOMathWrapping}
+            disabled={isLoading}
+            class="comparison-btn debug-omath"
+          >
+            🔍 调试 w:oMath 包装
+          </button>
+          
+          <button 
+            on:click={testSingleFormula}
+            disabled={isLoading}
+            class="comparison-btn test-single"
+          >
+            🧪 测试单个公式
           </button>
         </div>
         
@@ -883,6 +1208,26 @@ ${comparisonResults.browserNative ? '📈 比较结果已更新，可以查看�
   
   .comparison-btn.compare-methods:hover:not(:disabled) {
     background-color: #E64A19;
+    transform: translateY(-1px);
+  }
+  
+  .comparison-btn.debug-omath {
+    background-color: #607D8B;
+    color: white;
+  }
+  
+  .comparison-btn.debug-omath:hover:not(:disabled) {
+    background-color: #455A64;
+    transform: translateY(-1px);
+  }
+  
+  .comparison-btn.test-single {
+    background-color: #795548;
+    color: white;
+  }
+  
+  .comparison-btn.test-single:hover:not(:disabled) {
+    background-color: #5D4037;
     transform: translateY(-1px);
   }
   

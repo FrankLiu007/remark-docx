@@ -5,7 +5,7 @@ import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import remarkDocx from '../src/index.js';
-import { preprocessMathFormulas } from '../src/mathPreprocessor.js';
+import { preprocessMathFormulas } from '../src/index.js';
 
 async function testComprehensive() {
   try {
@@ -60,13 +60,16 @@ async function testComprehensive() {
           };
         }
       });
+    
+    // 使用 process 方法一次性完成解析、转换和编译
     const result = await processor.process(preprocessedContent);
+    console.log('✅ unified 处理完成');
     
     console.log('✅ remark 处理完成');
     console.log('结果类型:', typeof result.result);
     console.log('结果构造函数:', result.result?.constructor?.name);
     
-    // 等待 Promise 解析
+    // 等待 Promise 解析（如果结果是 Promise）
     const actualResult = await result.result;
     console.log('解析后结果类型:', typeof actualResult);
     console.log('解析后结果构造函数:', actualResult?.constructor?.name);
