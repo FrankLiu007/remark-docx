@@ -428,7 +428,7 @@ const buildHeading = (
   { children, depth }: mdast.Heading,
   ctx: Context,
 ): DocxContent => {
-  let headingLevel: HeadingLevel;
+  let headingLevel: typeof HeadingLevel;
   switch (depth) {
     case 1:
       headingLevel = HeadingLevel.TITLE;
@@ -537,7 +537,7 @@ const buildTableRow = (
 const buildTableCell = (
   { children }: mdast.TableCell,
   ctx: Context,
-  align: AlignmentType | undefined,
+  align: typeof AlignmentType | undefined,
 ): TableCell => {
   const nodes = convertNodes(children, ctx);
   return new TableCell({
@@ -570,29 +570,18 @@ const buildCode = ({
 
 const buildMath = ({ value }: mdast.Math, ctx: Context): DocxContent[] => {
   const result = ctx.latex(value);
-  
+
   // 检查是否使用 OMML 解析器
   // OMML 解析器返回的是 ParagraphChild[][]（ImportedXmlComponent 或 Math 元素）
   // 原始解析器返回的是 MathRun[][]
-  if (result.length > 0 && result[0] && result[0].length > 0) {
-    const firstElement = result[0][0];
-    
-    // 检查是否为 OMML 生成的元素：
-    // 1. ImportedXmlComponent 元素（正确的 OMML 解析方法）
-    // 2. 有 type: 'textRun' 的错误文本（OMML 解析失败时的回退）
-    if (firstElement && typeof firstElement === 'object') {
-      // 检查是否为 ImportedXmlComponent（只有这个检查是可靠的）
-      if (firstElement.constructor?.name === 'ImportedXmlComponent') {
-        return result.map(children => new Paragraph({ children }));
-      }
-      
-      // 检查是否为 OMML 解析失败时的错误文本
-      if ('type' in firstElement && firstElement.type === 'textRun' && 
-          'text' in firstElement && typeof firstElement.text === 'string' &&
-          (firstElement.text.includes('[LaTeX:') || firstElement.text.includes('[LaTeX Error:'))) {
-        return result.map(children => new Paragraph({ children }));
-      }
-    }
+
+  if (result[0] && result[0][0] && (result[0][0] as any).rootKey === 'm:oMath') {
+    // OMML 解析器：直接返回数学公式元素，包装在段落中
+    return [
+      new Paragraph({
+        children: [result[0][0] as ParagraphChild],
+      }),
+    ];
   }
   
   // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
@@ -617,25 +606,10 @@ const buildInlineMath = (
   // 检查是否使用 OMML 解析器
   // OMML 解析器返回的是 ParagraphChild[][]（ImportedXmlComponent 或 Math 元素）
   // 原始解析器返回的是 MathRun[][]
-  if (result.length > 0 && result[0] && result[0].length > 0) {
-    const firstElement = result[0][0];
-    
-    // 检查是否为 OMML 生成的元素：
-    // 1. ImportedXmlComponent 元素（正确的 OMML 解析方法）
-    // 2. 有 type: 'textRun' 的错误文本（OMML 解析失败时的回退）
-    if (firstElement && typeof firstElement === 'object') {
-      // 检查是否为 ImportedXmlComponent（只有这个检查是可靠的）
-      if (firstElement.constructor?.name === 'ImportedXmlComponent') {
-        return result[0][0] as DocxContent;
-      }
-      
-      // 检查是否为 OMML 解析失败时的错误文本
-      if ('type' in firstElement && firstElement.type === 'textRun' && 
-          'text' in firstElement && typeof firstElement.text === 'string' &&
-          (firstElement.text.includes('[LaTeX:') || firstElement.text.includes('[LaTeX Error:'))) {
-        return result[0][0] as DocxContent;
-      }
-    }
+
+  if (result[0] && result[0][0] && (result[0][0] as any).rootKey === 'm:oMath') {
+    // OMML 解析器：直接返回数学公式元素
+    return result[0][0] as DocxContent;
   }
   
   // 原始解析器返回的是 MathRun[][]，包装成 Math 元素

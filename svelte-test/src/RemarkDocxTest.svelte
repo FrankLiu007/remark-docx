@@ -448,117 +448,7 @@ ${comparisonResults.browserNative ? '📈 比较结果已更新，可以查看�
     showResult('✅ 比较结果已清空', 'success');
   }
 
-  // 测试 XSL 缓存功能
-  function testXSLCache() {
-    try {
-      // 导入 clearXSLContentCache 函数
-      import('remark-docx').then((module) => {
-        if (module.clearXSLContentCache) {
-          module.clearXSLContentCache();
-          showResult('✅ XSL 缓存已清除，下次转换将重新读取 XSL 内容', 'success');
-        } else {
-          showResult('❌ clearXSLContentCache 函数不可用', 'error');
-        }
-      }).catch((error) => {
-        showResult(`❌ 导入 clearXSLContentCache 失败: ${error.message}`, 'error');
-      });
-    } catch (error) {
-      showResult(`❌ 测试 XSL 缓存失败: ${error.message}`, 'error');
-    }
-  }
 
-  // 比较两种转换方法
-  function compareMethods() {
-    if (!markdownInput.trim()) {
-      showResult('❌ 请输入 Markdown 内容', 'error');
-      return;
-    }
-
-    try {
-      // 预处理数学公式
-      const preprocessedContent = preprocessMathFormulas(markdownInput);
-      
-      // 提取第一个数学公式进行测试
-      const mathMatch = preprocessedContent.match(/\$([^$]+)\$/);
-      if (!mathMatch) {
-        showResult('❌ 未找到数学公式，请确保输入包含 $...$ 格式的数学公式', 'error');
-        return;
-      }
-
-      const latex = mathMatch[1];
-      showResult(`🔍 正在比较转换方法，测试公式: ${latex}`, 'loading');
-
-      // 使用 KaTeX 转换为 MathML
-      import('katex').then((katex) => {
-        const mathml = katex.default.renderToString(latex, {
-          throwOnError: false,
-          output: 'mathml'
-        });
-        
-        // 提取 MathML 内容
-        const mathmlMatch = mathml.match(/<math[\s\S]*?<\/math>/i);
-        if (!mathmlMatch) {
-          showResult('❌ 无法提取 MathML 内容', 'error');
-          return;
-        }
-
-        const mathmlContent = mathmlMatch[0];
-        
-        // 导入比较函数
-        import('remark-docx').then((module) => {
-          if (module.compareConversionMethods) {
-            const comparison = module.compareConversionMethods(mathmlContent);
-            
-            // 保存比较结果到状态
-            comparisonData = {
-              xslResult: comparison.xslResult || '',
-              libraryResult: comparison.libraryResult || '',
-              testFormula: latex,
-              mathmlContent: mathmlContent
-            };
-            
-            let resultText = `📊 转换方法比较结果\n\n`;
-            resultText += `🧮 测试公式: ${latex}\n`;
-            resultText += `📝 MathML 长度: ${mathmlContent.length}\n\n`;
-            
-            resultText += `🌐 浏览器原生 XSL:\n`;
-            resultText += `  ✅ 转换: ${comparison.xslResult ? '成功' : '失败'}\n`;
-            if (comparison.xslResult) {
-              resultText += `  📏 长度: ${comparison.xslResult.length}\n`;
-            }
-            
-            resultText += `\n📚 mathml2omml 库:\n`;
-            resultText += `  ✅ 转换: ${comparison.libraryResult ? '成功' : '失败'}\n`;
-            if (comparison.libraryResult) {
-              resultText += `  📏 长度: ${comparison.libraryResult.length}\n`;
-            }
-            
-            resultText += `\n🔍 比较结果:\n`;
-            resultText += `  ${comparison.areSame ? '✅ 结果相同' : '❌ 结果不同'}\n`;
-            comparison.differences.forEach(diff => {
-              resultText += `  • ${diff}\n`;
-            });
-            
-            resultText += `\n📋 详细结果已显示在下方文本框中：`;
-            resultText += `\n  • MathML 中间结果（橙色边框）`;
-            resultText += `\n  • XSL 转换结果（绿色边框）`;
-            resultText += `\n  • mathml2omml 库结果（蓝色边框）`;
-            resultText += `\n\n💡 可以复制各阶段结果进行详细对比分析`;
-
-            showResult(resultText, 'success');
-          } else {
-            showResult('❌ compareConversionMethods 函数不可用', 'error');
-          }
-        }).catch((error) => {
-          showResult(`❌ 导入比较函数失败: ${error.message}`, 'error');
-        });
-      }).catch((error) => {
-        showResult(`❌ KaTeX 转换失败: ${error.message}`, 'error');
-      });
-    } catch (error) {
-      showResult(`❌ 比较转换方法失败: ${error.message}`, 'error');
-    }
-  }
 
   // 调试 w:oMath 重复包装问题
   async function debugOMathWrapping() {
@@ -918,21 +808,6 @@ ${comparisonResults.browserNative ? '📈 比较结果已更新，可以查看�
             🗑️ 清空比较
           </button>
           
-          <button 
-            on:click={testXSLCache}
-            disabled={isLoading}
-            class="comparison-btn cache"
-          >
-            🔄 测试 XSL 缓存
-          </button>
-          
-          <button 
-            on:click={compareMethods}
-            disabled={isLoading}
-            class="comparison-btn compare-methods"
-          >
-            🔬 比较转换方法
-          </button>
           
           <button 
             on:click={debugOMathWrapping}

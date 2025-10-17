@@ -132,23 +132,10 @@ export function testMathPreprocessor(): void {
     '嵌套文本：这里有 \\(\\alpha + \\beta = \\gamma\\) 和一些文本，然后是 \\[\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\\]'
   ];
 
-  console.log('=== 数学公式预处理器测试 ===\n');
-
-  testCases.forEach((testCase, index) => {
-    console.log(`测试用例 ${index + 1}:`);
-    console.log(`原始文本: "${testCase}"`);
-    
-    const processed = preprocessMathFormulas(testCase);
-    console.log(`预处理后: "${processed}"`);
-    
-    // 检查是否有变化
-    if (processed !== testCase) {
-      console.log('✓ 已转换');
-    } else {
-      console.log('- 无需转换');
-    }
-    
-    console.log('---\n');
+  // 测试用例已移除 console.log 输出
+  testCases.forEach((testCase) => {
+    preprocessMathFormulas(testCase);
+    // 静默测试，不输出到控制台
   });
 }
 

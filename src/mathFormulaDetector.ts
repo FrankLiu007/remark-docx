@@ -286,28 +286,14 @@ export function testMathFormulaDetector() {
     '复杂公式：$x = 1 \\quad \\text{和} \\quad x = \\frac{1}{2}$'
   ];
   
-  console.log('=== 数学公式检测器测试 ===');
-  
-  testCases.forEach((testCase, index) => {
-    console.log(`\n测试用例 ${index + 1}: ${testCase}`);
-    
+  // 测试用例已移除 console.log 输出
+  testCases.forEach((testCase) => {
     // 测试公式检测
-    const formulas = detectMathFormulas(testCase);
-    console.log(`检测到 ${formulas.length} 个公式:`);
-    formulas.forEach((formula, i) => {
-      console.log(`  ${i + 1}. ${formula.type}: "${formula.latex}" (${formula.startIndex}-${formula.endIndex})`);
-    });
+    detectMathFormulas(testCase);
     
     // 测试文本分割
-    const segments = splitTextWithMathFormulas(testCase);
-    console.log(`分割为 ${segments.length} 个片段:`);
-    segments.forEach((segment, i) => {
-      if (segment.type === 'text') {
-        console.log(`  ${i + 1}. 文本: "${segment.content}"`);
-      } else {
-        console.log(`  ${i + 1}. 公式: "${segment.content}" (LaTeX: "${segment.formula?.latex}")`);
-      }
-    });
+    splitTextWithMathFormulas(testCase);
+    // 静默测试，不输出到控制台
   });
 }
 
