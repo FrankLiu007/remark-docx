@@ -14,8 +14,24 @@ import { preprocessMathFormulas } from "./mathPreprocessor";
 
 export type { DocxOptions };
 
-const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions = {}) {
+const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions | undefined = undefined) {
   let images: ImageDataMap = {};
+
+  // 提供默认选项
+  const defaultOpts: DocxOptions = {
+    output: 'buffer',
+    useOMML: true,
+    useBrowserXSL: false,
+    imageResolver: async (_url: string): Promise<ImageData> => {
+      return {
+        image: new Uint8Array(0),
+        width: 100,
+        height: 100
+      };
+    }
+  };
+
+  const finalOpts = { ...defaultOpts, ...opts };
 
   // 添加预处理步骤，将 LaTeX 格式的数学公式转换为 remark-math 支持的格式
   this.use(function() {
@@ -50,8 +66,8 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
   this.Compiler = (node) => {
     // 根据选项选择 LaTeX 解析器
     let latexParser;
-    if (opts.useOMML) {
-      if (opts.useBrowserXSL) {
+    if (finalOpts.useOMML) {
+      if (finalOpts.useBrowserXSL) {
         // 使用真正的浏览器原生 XSL 转换（同步）
         latexParser = parseLatexOMMLWithXSL;
 
@@ -65,7 +81,7 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
       latexParser = parseLatex;
     }
     
-    return mdastToDocx(node as any, opts, images, latexParser);
+    return mdastToDocx(node as any, finalOpts, images, latexParser);
   };
 
   // 返回图片处理转换器
@@ -88,7 +104,7 @@ const plugin: Plugin<[(DocxOptions | undefined)?]> = function (opts: DocxOptions
       return node;
     }
 
-    const imageResolver = opts.imageResolver;
+    const imageResolver = finalOpts.imageResolver;
     invariant(imageResolver, "options.imageResolver is not defined.");
 
     const resolved = new Set<string>();

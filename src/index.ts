@@ -12,11 +12,7 @@ export { remarkDocx };
 export type { DocxOptions };
 export { preprocessMathFormulas, preprocessMathFormulasBatch };
 
-// 高度封装 API 类型定义
-export interface HighLevelDocxOptions extends Partial<Omit<DocxOptions, 'imageResolver' | 'output'>> {
-  imageResolver?: DocxOptions['imageResolver'];
-  output?: 'buffer' | 'blob';
-}
+// 直接使用 DocxOptions，简化 API
 
 export interface ProcessorResult {
   result: Buffer | Blob | string;
@@ -24,19 +20,12 @@ export interface ProcessorResult {
 }
 
 /**
- * 高度封装的 DOCX 处理器创建函数
+ * DOCX 处理器创建函数
  * 简化了 unified 配置流程，提供一站式解决方案
  */
-export function createRemarkDocxProcessor(options: HighLevelDocxOptions = {}) {
+export function createRemarkDocxProcessor(options: Partial<DocxOptions> = {}) {
   // 合并默认选项
   const defaultOptions: DocxOptions = {
-    title: 'Document',
-    subject: '',
-    keywords: '',
-    description: '',
-    revision: 1,
-    styles: {},
-    background: undefined,
     output: 'blob',
     useOMML: true,
     useBrowserXSL: false,
@@ -63,10 +52,10 @@ export function createRemarkDocxProcessor(options: HighLevelDocxOptions = {}) {
 }
 
 /**
- * 便捷的 Markdown 转 DOCX 函数
+ * 便捷的 Markdown 转 DOCX 函数（异步版本）
  * 一步完成预处理、处理和返回结果
  */
-export async function markdownToDocx(markdown: string, options: HighLevelDocxOptions = {}): Promise<ProcessorResult> {
+export async function markdownToDocx(markdown: string, options: Partial<DocxOptions> = {}): Promise<ProcessorResult> {
   const processor = createRemarkDocxProcessor(options);
   
   // 预处理数学公式
@@ -82,5 +71,21 @@ export async function markdownToDocx(markdown: string, options: HighLevelDocxOpt
   };
 }
 
-// 默认导出
-export { remarkDocx as default } from "./plugin";
+/**
+ * 便捷的 Markdown 转 DOCX 函数（同步版本）
+ * 返回 Promise，让调用方决定如何处理异步
+ */
+export function markdownToDocxSync(markdown: string, options: Partial<DocxOptions> = {}): Promise<ProcessorResult> {
+  const processor = createRemarkDocxProcessor(options);
+  
+  // 预处理数学公式
+  const preprocessedContent = preprocessMathFormulas(markdown);
+  
+  // 处理 Markdown - 直接返回 Promise，不 await
+  return processor.process(preprocessedContent).then(result => ({
+    result: result.result as Buffer | Blob | string,
+    messages: result.messages
+  }));
+}
+
+// 默认导出已移除，避免混合导出警告

@@ -21,7 +21,6 @@ import {
   CheckBox,
   MathRun,
 } from "docx";
-import type { IPropertiesOptions } from "docx/build/file/core-properties";
 import type * as mdast from "./models/mdast";
 import { invariant, unreachable } from "./utils";
 import { visit } from "unist-util-visit";
@@ -172,19 +171,19 @@ type Context = Readonly<{
   latex: LatexParser;
 }>;
 
-export interface DocxOptions
-  extends Pick<
-    IPropertiesOptions,
-    | "title"
-    | "subject"
-    | "creator"
-    | "keywords"
-    | "description"
-    | "lastModifiedBy"
-    | "revision"
-    | "styles"
-    | "background"
-  > {
+export interface DocxOptions {
+  /**
+   * Document metadata - all optional
+   */
+  title?: string;
+  subject?: string;
+  creator?: string;
+  keywords?: string;
+  description?: string;
+  lastModifiedBy?: string;
+  revision?: number;
+  styles?: any;
+  background?: any;
   /**
    * Set output type of `VFile.result`. `buffer` is `Promise<Buffer>`. `blob` is `Promise<Blob>`.
    */
@@ -213,15 +212,15 @@ export const mdastToDocx = async (
   node: mdast.Root,
   {
     output = "buffer",
-    title,
-    subject,
-    creator,
-    keywords,
-    description,
-    lastModifiedBy,
-    revision,
-    styles,
-    background,
+    title = "Document",
+    subject = "",
+    creator = "remark-docx",
+    keywords = "",
+    description = "",
+    lastModifiedBy = "remark-docx",
+    revision = 1,
+    styles = {},
+    background = undefined,
   }: DocxOptions,
   images: ImageDataMap,
   latex: LatexParser,
@@ -428,7 +427,7 @@ const buildHeading = (
   { children, depth }: mdast.Heading,
   ctx: Context,
 ): DocxContent => {
-  let headingLevel: typeof HeadingLevel;
+  let headingLevel: (typeof HeadingLevel)[keyof typeof HeadingLevel];
   switch (depth) {
     case 1:
       headingLevel = HeadingLevel.TITLE;
@@ -447,6 +446,9 @@ const buildHeading = (
       break;
     case 6:
       headingLevel = HeadingLevel.HEADING_5;
+      break;
+    default:
+      headingLevel = HeadingLevel.HEADING_6;
       break;
   }
   const nodes = convertNodes(children, ctx);
@@ -502,7 +504,7 @@ const buildTable = (
   { children, align }: mdast.Table,
   ctx: Context,
 ): DocxContent => {
-  const cellAligns: AlignmentType[] | undefined = align?.map((a) => {
+  const cellAligns: (typeof AlignmentType)[keyof typeof AlignmentType][] | undefined = align?.map((a) => {
     switch (a) {
       case "left":
         return AlignmentType.LEFT;
@@ -525,7 +527,7 @@ const buildTable = (
 const buildTableRow = (
   { children }: mdast.TableRow,
   ctx: Context,
-  cellAligns: AlignmentType[] | undefined,
+  cellAligns: (typeof AlignmentType)[keyof typeof AlignmentType][] | undefined,
 ): TableRow => {
   return new TableRow({
     children: children.map((c, i) => {
@@ -537,7 +539,7 @@ const buildTableRow = (
 const buildTableCell = (
   { children }: mdast.TableCell,
   ctx: Context,
-  align: typeof AlignmentType | undefined,
+  align: (typeof AlignmentType)[keyof typeof AlignmentType] | undefined,
 ): TableCell => {
   const nodes = convertNodes(children, ctx);
   return new TableCell({
@@ -650,13 +652,33 @@ const buildImage = (
   invariant(img, `Fetch image was failed: ${url}`);
 
   const { image, width, height } = img;
-  return new ImageRun({
-    data: image,
-    transformation: {
-      width,
-      height,
-    },
-  });
+  
+  // Check if this is an SVG image by looking at the data
+  const isSvg = typeof image === 'string' && image.includes('<svg');
+  
+  if (isSvg) {
+    return new ImageRun({
+      data: image,
+      type: 'svg' as const,
+      fallback: {
+        type: 'png' as const,
+        data: new Uint8Array(0),
+      },
+      transformation: {
+        width,
+        height,
+      },
+    });
+  } else {
+    return new ImageRun({
+      data: image,
+      type: 'png' as const,
+      transformation: {
+        width,
+        height,
+      },
+    });
+  }
 };
 
 const buildLinkReference = (

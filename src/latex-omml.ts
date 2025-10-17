@@ -1,4 +1,4 @@
-import { ParagraphChild, ImportedXmlComponent, TextRun, Math } from "docx";
+import { ParagraphChild, ImportedXmlComponent, TextRun } from "docx";
 import { mml2omml } from "mathml2omml";
 import katex from "katex";
 import { getEmbeddedXSLContent } from "./embedded-xsl";
@@ -211,7 +211,6 @@ export const ConversionMethod = {
 
 // 缓存环境检测结果，避免重复判断
 let _isBrowserEnvironment: boolean | null = null;
-let _defaultConversionMethod: ConversionMethod | null = null;
 
 // 缓存 XSL 内容，避免重复读取
 let _cachedXSLContent: string | null = null;
@@ -229,15 +228,6 @@ function isBrowserEnvironment(): boolean {
   return _isBrowserEnvironment;
 }
 
-/**
- * 获取默认的转换方案（缓存结果）
- */
-function getDefaultConversionMethod(): ConversionMethod {
-  if (_defaultConversionMethod === null) {
-    _defaultConversionMethod = isBrowserEnvironment() ? ConversionMethod.XSLT_PROCESSOR : ConversionMethod.MATHML2OMML;
-  }
-  return _defaultConversionMethod;
-}
 
 
 /**
