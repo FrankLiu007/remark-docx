@@ -73,28 +73,23 @@ export function preprocessMathFormulas(text: string): string {
         }
       } else if (formula.fullMatch.startsWith('$$') && formula.fullMatch.endsWith('$$')) {
         // 处理 $$...$$ 格式，根据内容决定使用 $ 还是 $$
-        const trimmedLatex = formula.latex.trim();
+        const trimmedLatex = formula.latex.trim();        
+
+        // 跨行公式，使用 $$ 格式
+        // 检查前面是否需要添加空行
+        const needsLeadingNewline = processedText.length > 0 && 
+          !processedText.endsWith('\n');
         
-        // 检查是否包含换行符，如果有则使用 $$ 格式，否则使用 $ 格式
-        if (trimmedLatex.includes('\n')) {
-          // 跨行公式，使用 $$ 格式
-          // 检查前面是否需要添加空行
-          const needsLeadingNewline = processedText.length > 0 && 
-            !processedText.endsWith('\n');
-          
-          // 添加前置空行
-          if (needsLeadingNewline) {
-            processedText += '\n';
-          }
-          
-          processedText += `$$\n${trimmedLatex}\n$$`;
-          
-          // 添加后置空行（确保公式后有空行）
+        // 添加前置空行
+        if (needsLeadingNewline) {
           processedText += '\n';
-        } else {
-          // 单行公式，使用 $ 格式
-          processedText += `$${trimmedLatex}$`;
         }
+        
+        processedText += `$$\n${trimmedLatex}\n$$`;
+        
+        // 添加后置空行（确保公式后有空行）
+        processedText += '\n';
+ 
       }
       else {
         // 其他格式，检查是否需要格式化
