@@ -23,13 +23,72 @@ const KATEX_CONFIG = {
   }
 };
 
+/**
+ * 需要强制上下标的运算符列表
+ * 这些运算符在行内公式中默认会将上下标放在右侧，需要添加 \limits 强制放在上下方
+ */
+const OPERATORS_WITH_LIMITS = [
+  '\\sum', '\\prod', '\\coprod',
+  '\\int', '\\oint', '\\iint', '\\iiint', '\\iiiint', '\\idotsint',
+  '\\bigcup', '\\bigcap', '\\bigvee', '\\bigwedge', '\\bigsqcup', '\\biguplus',
+  '\\lim', '\\liminf', '\\limsup', '\\max', '\\min', '\\sup', '\\inf',
+  '\\det', '\\Pr'
+];
+
+/**
+ * 预处理 LaTeX 代码，为需要强制上下标的运算符添加 \limits
+ * 确保求和、连乘、极限等符号的上下标始终在上下方，而不是右侧
+ */
+function preprocessLatexForLimits(latex: string): string {
+  if (!latex || typeof latex !== 'string') {
+    return latex;
+  }
+
+  let result = latex;
+  
+  // 遍历每个需要强制上下标的运算符
+  for (const op of OPERATORS_WITH_LIMITS) {
+    let pos = 0;
+    
+    // 查找所有运算符出现的位置
+    while ((pos = result.indexOf(op, pos)) !== -1) {
+      const afterOp = pos + op.length;
+      const remaining = result.substring(afterOp);
+      const trimmed = remaining.trimStart();
+      
+      // 检查是否已经有 \limits 或 \nolimits
+      const hasLimits = trimmed.startsWith('\\limits') || trimmed.startsWith('\\nolimits');
+      
+      // 检查后面是否有上下标（_{ 或 ^{）
+      const hasSubSup = trimmed.startsWith('_{') || trimmed.startsWith('^{') || 
+                        trimmed.startsWith('_') || trimmed.startsWith('^');
+      
+      // 如果有上下标但没有 \limits，则添加
+      if (hasSubSup && !hasLimits) {
+        const whitespace = remaining.length - trimmed.length;
+        result = result.substring(0, afterOp) + 
+                 remaining.substring(0, whitespace) + 
+                 '\\limits' + 
+                 trimmed;
+        pos = afterOp + whitespace + '\\limits'.length;
+      } else {
+        pos = afterOp;
+      }
+    }
+  }
+  
+  return result;
+}
 
 /**
  * 使用 KaTeX 将 LaTeX 转换为 MathML
  */
 function latexToMathML(latex: string, displayMode: boolean = false): string | null {
   try {
-    const mathml = katex.renderToString(latex, {
+    // 预处理 LaTeX，强制上下标在上下方
+    const processedLatex = preprocessLatexForLimits(latex);
+    
+    const mathml = katex.renderToString(processedLatex, {
       ...KATEX_CONFIG,
       output: 'mathml',
       displayMode: displayMode
@@ -48,8 +107,10 @@ function latexToMathML(latex: string, displayMode: boolean = false): string | nu
 
 /**
  * 使用 mathml2omml 库将 MathML 转换为 OMML
+ * @param mathml MathML 字符串
+ * @param displayMode 是否为块级公式（display mode），默认为 false（行内公式）
  */
-function mathMLtoOMML(mathml: string): string | null {
+function mathMLtoOMML(mathml: string, displayMode: boolean = false): string | null {
 
   try {
     const omml = mml2omml(mathml, { disableDecode: true });
@@ -60,15 +121,27 @@ function mathMLtoOMML(mathml: string): string | null {
     // 确保 OMML 结构正确，避免嵌套的 m:oMath 元素
     let cleanOmml = omml.trim();
     
-    // 如果 OMML 已经包含完整的 m:oMath 结构，直接返回
+    // 如果 OMML 已经包含完整的 m:oMath 结构，检查并添加 display 属性
     if (cleanOmml.startsWith('<m:oMath') && cleanOmml.endsWith('</m:oMath>')) {
+      // 检查是否已经有 display 属性
+      if (!cleanOmml.includes('display=')) {
+        // 在 <m:oMath 后添加 display 属性
+        // display="inline" 表示行内公式，display="block" 表示块级公式
+        // 设置为 inline 可以防止 Word 自动转换为"专业"格式
+        const displayValue = displayMode ? 'block' : 'inline';
+        cleanOmml = cleanOmml.replace(
+          /<m:oMath(\s|>)/,
+          `<m:oMath display="${displayValue}"$1`
+        );
+      }
       return cleanOmml;
     }
     
     // 如果 OMML 不包含 m:oMath 包装，添加它
     // 使用更严格的检查，确保不会重复添加
     if (!cleanOmml.includes('<m:oMath') && !cleanOmml.includes('</m:oMath>')) {
-      cleanOmml = `<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${cleanOmml}</m:oMath>`;
+      const displayValue = displayMode ? 'block' : 'inline';
+      cleanOmml = `<m:oMath display="${displayValue}" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${cleanOmml}</m:oMath>`;
     }
     
     return cleanOmml;
@@ -306,7 +379,8 @@ export function parseLatexOMMLWithLibrary(value: string): ParagraphChild[][] {
     }
     
     // 使用 mathml2omml 库将 MathML 转换为 OMML
-    const omml = mathMLtoOMML(mathml);
+    // 传递 displayMode 参数，确保 OMML 格式正确
+    const omml = mathMLtoOMML(mathml, isDisplayMode);
     if (!omml) {
       return [[new TextRun({
         text: `[LaTeX: ${value}]`,
@@ -375,7 +449,8 @@ export function parseLatexOMMLWithXSL(value: string, _xslPath?: string): Paragra
     
     if (!omml) {
       // 回退到 mathml2omml 库
-      omml = mathMLtoOMML(mathml);
+      // 传递 displayMode 参数，确保 OMML 格式正确
+      omml = mathMLtoOMML(mathml, isDisplayMode);
     }
     
     if (!omml) {

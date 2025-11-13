@@ -28,7 +28,7 @@ Set output type of `VFile.result`. `buffer` is `Promise<Buffer>`. `blob` is `Pro
 
 Defined in: [src/mdast-to-docx.ts:189](https://github.com/inokawa/remark-docx/blob/c5254cb8a86c89703abbdc07740610a93e99b5a5/src/mdast-to-docx.ts#L189)
 
-**You must set** if your markdown includes images. See example for [browser](https://github.com/inokawa/remark-docx/blob/main/stories/playground.stories.tsx) and [Node.js](https://github.com/inokawa/remark-docx/blob/main/src/index.spec.ts).
+**You must set** if your markdown includes images. See example in [src/index.spec.ts](https://github.com/inokawa/remark-docx/blob/main/src/index.spec.ts).
 
 ***
 

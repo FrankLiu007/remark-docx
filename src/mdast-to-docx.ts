@@ -189,7 +189,7 @@ export interface DocxOptions {
    */
   output?: "buffer" | "blob";
   /**
-   * **You must set** if your markdown includes images. See example for [browser](https://github.com/inokawa/remark-docx/blob/main/stories/playground.stories.tsx) and [Node.js](https://github.com/inokawa/remark-docx/blob/main/src/index.spec.ts).
+   * **You must set** if your markdown includes images. See example in [src/index.spec.ts](https://github.com/inokawa/remark-docx/blob/main/src/index.spec.ts).
    */
   imageResolver?: ImageResolver;
   /**
