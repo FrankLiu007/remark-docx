@@ -3,7 +3,7 @@
  * 使用 mathFormulaDetector.ts 来检测和处理 \( 和 \[ 格式的数学公式
  */
 
-import { detectMathFormulas, splitTextWithMathFormulas} from './mathFormulaDetector';
+import { detectMathFormulas, splitTextWithMathFormulas, MathFormula, TextSegment } from './mathFormulaDetector';
 
 /**
  * 预处理文本，将 LaTeX 格式的数学公式转换为 remark-math 支持的格式
@@ -18,89 +18,105 @@ export function preprocessMathFormulas(text: string): string {
     return text;
   }
 
-  // 使用 mathFormulaDetector 检测所有数学公式
   const formulas = detectMathFormulas(text);
-  
   if (formulas.length === 0) {
-    // 没有检测到数学公式，直接返回原文本
     return text;
   }
 
-  // 分割文本为公式和非公式部分 - 这种方法更清晰易懂
   const segments = splitTextWithMathFormulas(text);
-  
-  // 构建预处理后的文本
   let processedText = '';
   
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
-    
     if (!segment) continue;
     
     if (segment.type === 'text') {
-      // 普通文本，直接添加
       processedText += segment.content;
     } else if (segment.type === 'formula' && segment.formula) {
-      // 数学公式，根据类型转换为对应的格式
-      const formula = segment.formula;
-      
-      if (formula.fullMatch.startsWith('\\(') && formula.fullMatch.endsWith('\\)')) {
-        // LaTeX 行内公式 \(...\) → $...$
-        processedText += `$${formula.latex}$`;
-      } else if (formula.fullMatch.startsWith('\\[') && formula.fullMatch.endsWith('\\]')) {
-        // LaTeX 块级公式 \[...\] → 根据内容决定使用 $ 还是 $$
-        const trimmedLatex = formula.latex.trim();
-        
-        // 检查是否包含换行符，如果有则使用 $$ 格式，否则使用 $ 格式
-        if (trimmedLatex.includes('\n')) {
-          // 跨行公式，使用 $$ 格式
-          // 检查前面是否需要添加空行
-          const needsLeadingNewline = processedText.length > 0 && 
-            !processedText.endsWith('\n');
-          
-          // 添加前置空行
-          if (needsLeadingNewline) {
-            processedText += '\n';
-          }
-          
-          processedText += `$$\n${trimmedLatex}\n$$`;
-          
-          // 添加后置空行（确保公式后有空行）
-          processedText += '\n';
-        } else {
-          // 单行公式，使用 $ 格式
-          processedText += `$${trimmedLatex}$`;
-        }
-      } else if (formula.fullMatch.startsWith('$$') && formula.fullMatch.endsWith('$$')) {
-        // 处理 $$...$$ 格式，根据内容决定使用 $ 还是 $$
-        const trimmedLatex = formula.latex.trim();        
-
-        // 跨行公式，使用 $$ 格式
-        // 检查前面是否需要添加空行
-        const needsLeadingNewline = processedText.length > 0 && 
-          !processedText.endsWith('\n');
-        
-        // 添加前置空行
-        if (needsLeadingNewline) {
-          processedText += '\n';
-        }
-        
-        processedText += `$$\n${trimmedLatex}\n$$`;
-        
-        // 添加后置空行（确保公式后有空行）
-        processedText += '\n';
- 
-      }
-      else {
-        // 其他格式，检查是否需要格式化
-        // $...$ 格式，保持原样
-        processedText += segment.content;        
-      }
+      const isInTable = isInTableContext(processedText, segments, i);
+      processedText += formatFormula(segment.formula, isInTable, processedText);
     }
   }
   
   return processedText;
 }
+
+/**
+ * 判断当前公式是否处于表格上下文中
+ */
+function isInTableContext(processedText: string, segments: TextSegment[], currentIndex: number): boolean {
+  // 检查当前行是否包含表格分隔符
+  const lastNewlineIndex = processedText.lastIndexOf('\n');
+  const currentLinePart = lastNewlineIndex === -1 ? processedText : processedText.substring(lastNewlineIndex + 1);
+  
+  if (currentLinePart.includes('|')) return true;
+
+  // 检查后继文本片段的第一行是否包含表格分隔符
+  for (let j = currentIndex + 1; j < segments.length; j++) {
+    const nextSeg = segments[j];
+    if (nextSeg && nextSeg.type === 'text') {
+      const firstLineOfNextText = nextSeg.content.split('\n')[0] || '';
+      if (firstLineOfNextText.includes('|')) return true;
+      break;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * 格式化单个数学公式
+ */
+function formatFormula(formula: MathFormula, isInTable: boolean, prevText: string): string {
+  const { fullMatch, latex } = formula;
+
+  if (isInTable) {
+    // 表格内强制压缩为单行 inline 格式，并移除多余空白
+    const flatLatex = latex.replace(/\s+/g, ' ').trim();
+    return `$${flatLatex}$`;
+  }
+
+  if (fullMatch.startsWith('\\(') && fullMatch.endsWith('\\)')) {
+    // \(...\) -> $...$
+    return `$${latex}$`;
+  }
+
+  if (fullMatch.startsWith('\\[') && fullMatch.endsWith('\\]')) {
+    const trimmedLatex = latex.trim();
+    // 跨行使用 display math，单行使用 inline math
+    return trimmedLatex.includes('\n') 
+      ? formatDisplayMath(trimmedLatex, prevText) 
+      : `$${trimmedLatex}$`;
+  }
+
+  if (fullMatch.startsWith('$$') && fullMatch.endsWith('$$')) {
+    // $$...$$ -> 统一使用 display math 处理
+    return formatDisplayMath(latex.trim(), prevText);
+  }
+
+  // 默认保持原样 (如已经是 $...$ 格式)
+  return fullMatch;
+}
+
+/**
+ * 格式化块级数学公式 (Display Math)，确保前后有正确的换行符
+ */
+function formatDisplayMath(latex: string, prevText: string): string {
+  let result = '';
+  
+  // 检查是否需要前置换行
+  if (prevText.length > 0 && !prevText.endsWith('\n')) {
+    result += '\n';
+  }
+  
+  result += `$$\n${latex}\n$$`;
+  
+  // 块级公式后通常需要跟一个换行符
+  result += '\n';
+  
+  return result;
+}
+
 
 /**
  * 批量预处理多个文本段落
