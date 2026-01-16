@@ -11,7 +11,7 @@ import {
   TextRun,
   ImageRun,
   ExternalHyperlink,
-  Math,
+  Math as DocxMath,
   HeadingLevel,
   LevelFormat,
   AlignmentType,
@@ -169,6 +169,14 @@ type Context = Readonly<{
   def: Readonly<Definition>;
   footnote: FootnoteRegistry;
   latex: LatexParser;
+  tableStyle?: {
+    headerBackgroundColor: string;
+    borderColor: string;
+    borderSize: number;
+    width: number | string;
+    alignment: 'left' | 'center' | 'right';
+    cellPadding: number;
+  };
 }>;
 
 export interface DocxOptions {
@@ -203,6 +211,17 @@ export interface DocxOptions {
    * Only applies when useOMML is true.
    */
   useBrowserXSL?: boolean;
+  /**
+   * Table style configuration
+   */
+  tableStyle?: {
+    headerBackgroundColor?: string; // hex without #
+    borderColor?: string; // hex without #
+    borderSize?: number; // twips
+    width?: number | string; // twips or percentage
+    alignment?: 'left' | 'center' | 'right';
+    cellPadding?: number; // twips
+  };
 }
 
 type DocxChild = Paragraph | Table | TableOfContents;
@@ -221,6 +240,7 @@ export const mdastToDocx = async (
     revision = 1,
     styles = {},
     background = undefined,
+    tableStyle,
   }: DocxOptions,
   images: ImageDataMap,
   latex: LatexParser,
@@ -231,6 +251,22 @@ export const mdastToDocx = async (
   });
 
   const footnote = createFootnoteRegistry();
+  
+  // 设置默认表格样式
+  const defaultTableStyle = {
+    headerBackgroundColor: 'f9fafb',
+    borderColor: 'e5e7eb',
+    borderSize: 8, // 0.4pt = 8 twips (更细的边框，接近 CSS 1px)
+    width: '100%',
+    alignment: 'center' as const,
+    cellPadding: 240, // 12pt = 240 twips
+  };
+  
+  const finalTableStyle = tableStyle ? {
+    ...defaultTableStyle,
+    ...tableStyle,
+  } : defaultTableStyle;
+  
   const nodes = convertNodes(node.children, {
     deco: {},
     images,
@@ -238,6 +274,7 @@ export const mdastToDocx = async (
     def: definition,
     footnote,
     latex,
+    tableStyle: finalTableStyle,
   });
   const doc = new Document({
     title,
@@ -517,9 +554,109 @@ const buildTable = (
     }
   });
 
+  const tableStyle = ctx.tableStyle;
+  if (!tableStyle) {
+    // 如果没有表格样式配置，使用默认行为
+    return new Table({
+      rows: children.map((r) => {
+        return buildTableRow(r, ctx, cellAligns, 0);
+      }),
+    });
+  }
+
+  // 计算列宽（平均分配）
+  const firstRow = children[0];
+  const columnCount = firstRow?.children?.length || 1;
+  const columnWidths: number[] = [];
+  
+  // 如果宽度是百分比，需要转换为 twips
+  // A4 页面宽度约为 11906 twips (8.27 inches * 1440 twips/inch)
+  // 减去左右边距（通常各 1440 twips），内容区宽度约为 9026 twips
+  const pageContentWidth = 9026; // 约 6.27 英寸的内容区宽度
+  
+  if (typeof tableStyle.width === 'string' && tableStyle.width.endsWith('%')) {
+    const percentage = parseFloat(tableStyle.width) / 100;
+    const totalWidth = Math.floor(pageContentWidth * percentage);
+    const columnWidth = Math.floor(totalWidth / columnCount);
+    for (let i = 0; i < columnCount; i++) {
+      columnWidths.push(columnWidth);
+    }
+  } else if (typeof tableStyle.width === 'number') {
+    const columnWidth = Math.floor(tableStyle.width / columnCount);
+    for (let i = 0; i < columnCount; i++) {
+      columnWidths.push(columnWidth);
+    }
+  } else {
+    // 默认：平均分配页面宽度
+    const columnWidth = Math.floor(pageContentWidth / columnCount);
+    for (let i = 0; i < columnCount; i++) {
+      columnWidths.push(columnWidth);
+    }
+  }
+
+  // 设置表格对齐方式
+  let tableAlignment: typeof AlignmentType[keyof typeof AlignmentType];
+  switch (tableStyle.alignment) {
+    case 'left':
+      tableAlignment = AlignmentType.LEFT;
+      break;
+    case 'right':
+      tableAlignment = AlignmentType.RIGHT;
+      break;
+    case 'center':
+    default:
+      tableAlignment = AlignmentType.CENTER;
+      break;
+  }
+
+  // 构建边框配置
+  const borderConfig = {
+    top: {
+      color: tableStyle.borderColor,
+      size: tableStyle.borderSize,
+      style: 'single' as const,
+    },
+    bottom: {
+      color: tableStyle.borderColor,
+      size: tableStyle.borderSize,
+      style: 'single' as const,
+    },
+    left: {
+      color: tableStyle.borderColor,
+      size: tableStyle.borderSize,
+      style: 'single' as const,
+    },
+    right: {
+      color: tableStyle.borderColor,
+      size: tableStyle.borderSize,
+      style: 'single' as const,
+    },
+    insideHorizontal: {
+      color: tableStyle.borderColor,
+      size: tableStyle.borderSize,
+      style: 'single' as const,
+    },
+    insideVertical: {
+      color: tableStyle.borderColor,
+      size: tableStyle.borderSize,
+      style: 'single' as const,
+    },
+  };
+
   return new Table({
-    rows: children.map((r) => {
-      return buildTableRow(r, ctx, cellAligns);
+    width: {
+      size: typeof tableStyle.width === 'number' 
+        ? tableStyle.width 
+        : (typeof tableStyle.width === 'string' && tableStyle.width.endsWith('%'))
+          ? Math.floor(pageContentWidth * parseFloat(tableStyle.width) / 100)
+          : pageContentWidth,
+      type: 'dxa', // twips
+    },
+    alignment: tableAlignment,
+    borders: borderConfig,
+    columnWidths: columnWidths,
+    rows: children.map((r, rowIndex) => {
+      return buildTableRow(r, ctx, cellAligns, rowIndex);
     }),
   });
 };
@@ -528,10 +665,12 @@ const buildTableRow = (
   { children }: mdast.TableRow,
   ctx: Context,
   cellAligns: (typeof AlignmentType)[keyof typeof AlignmentType][] | undefined,
+  rowIndex: number,
 ): TableRow => {
+  const isHeaderRow = rowIndex === 0; // 第一行是表头
   return new TableRow({
     children: children.map((c, i) => {
-      return buildTableCell(c, ctx, cellAligns?.[i]);
+      return buildTableCell(c, ctx, cellAligns?.[i], isHeaderRow);
     }),
   });
 };
@@ -540,16 +679,63 @@ const buildTableCell = (
   { children }: mdast.TableCell,
   ctx: Context,
   align: (typeof AlignmentType)[keyof typeof AlignmentType] | undefined,
+  isHeader: boolean,
 ): TableCell => {
   const nodes = convertNodes(children, ctx);
-  return new TableCell({
+  const tableStyle = ctx.tableStyle;
+  
+  const cellConfig: any = {
     children: [
       new Paragraph({
         alignment: align,
         children: nodes,
       }),
     ],
-  });
+  };
+
+  // 应用表格样式
+  if (tableStyle) {
+    // 设置单元格内边距（直接使用 twips）
+    cellConfig.margins = {
+      top: tableStyle.cellPadding,
+      bottom: tableStyle.cellPadding,
+      left: tableStyle.cellPadding,
+      right: tableStyle.cellPadding,
+    };
+
+    // 如果是表头，设置背景色
+    if (isHeader) {
+      cellConfig.shading = {
+        fill: tableStyle.headerBackgroundColor,
+      };
+    }
+
+    // 设置单元格边框（与表格边框一致）
+    cellConfig.borders = {
+      top: {
+        color: tableStyle.borderColor,
+        size: tableStyle.borderSize,
+        style: 'single' as const,
+      },
+      bottom: {
+        color: tableStyle.borderColor,
+        size: tableStyle.borderSize,
+        style: 'single' as const,
+      },
+      left: {
+        color: tableStyle.borderColor,
+        size: tableStyle.borderSize,
+        style: 'single' as const,
+      },
+      right: {
+        color: tableStyle.borderColor,
+        size: tableStyle.borderSize,
+        style: 'single' as const,
+      },
+    };
+  }
+
+  return new TableCell(cellConfig);
 };
 
 const buildHtml = ({ value }: mdast.HTML): DocxContent => {
@@ -591,7 +777,7 @@ const buildMath = ({ value }: mdast.Math, ctx: Context): DocxContent[] => {
     (runs) =>
       new Paragraph({
         children: [
-          new Math({
+          new DocxMath({
             children: runs as MathRun[],
           }),
         ],
@@ -615,18 +801,48 @@ const buildInlineMath = (
   }
   
   // 原始解析器返回的是 MathRun[][]，包装成 Math 元素
-  return new Math({
+  return new DocxMath({
     children: result.flatMap((runs) => runs as MathRun[]),
   });
 };
 
+// 检测文本中是否包含 emoji
+const containsEmoji = (text: string): boolean => {
+  // 检测各种 emoji Unicode 范围
+  const emojiPatterns = [
+    /[\u{1F300}-\u{1F9FF}]/u,        // 杂项符号和象形文字
+    /[\u{2600}-\u{26FF}]/u,          // 杂项符号
+    /[\u{2700}-\u{27BF}]/u,          // 装饰符号
+    /[\u{1F1E0}-\u{1F1FF}]/u,        // 区域指示符号（国旗）
+    /[\u{1F600}-\u{1F64F}]/u,        // 表情符号
+    /[\u{1F680}-\u{1F6FF}]/u,        // 交通和地图符号
+    /[\u{1F900}-\u{1F9FF}]/u,        // 补充符号和象形文字
+    /[\u{1FA00}-\u{1FA6F}]/u,        // 象棋符号
+    /[\u{1FA70}-\u{1FAFF}]/u,        // 符号和象形文字扩展-A
+    /\u{200D}/u,                     // 零宽连接符（用于组合 emoji）
+    /[\u{20D0}-\u{20FF}]/u,          // 组合用符号
+    /[\u{FE00}-\u{FE0F}]/u,          // 变体选择符
+    /[\u{FE20}-\u{FE2F}]/u,          // 组合用半符号
+  ];
+  
+  return emojiPatterns.some(pattern => pattern.test(text));
+};
+
 const buildText = (text: string, deco: Decoration): DocxContent => {
-  return new TextRun({
+  const textRunOptions: any = {
     text,
     bold: deco.strong,
     italics: deco.emphasis,
     strike: deco.delete,
-  });
+  };
+
+  // 如果文本包含 emoji，设置支持 emoji 的字体
+  if (containsEmoji(text)) {
+    // 使用 Segoe UI Emoji，Word 会自动处理字体回退
+    textRunOptions.font = 'Segoe UI Emoji';
+  }
+
+  return new TextRun(textRunOptions);
 };
 
 const buildBreak = (_: mdast.Break): DocxContent => {
