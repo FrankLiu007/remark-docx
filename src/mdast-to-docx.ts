@@ -12,7 +12,6 @@ import {
   ImageRun,
   ExternalHyperlink,
   Math as DocxMath,
-  HeadingLevel,
   LevelFormat,
   AlignmentType,
   IImageOptions,
@@ -464,33 +463,35 @@ const buildHeading = (
   { children, depth }: mdast.Heading,
   ctx: Context,
 ): DocxContent => {
-  let headingLevel: (typeof HeadingLevel)[keyof typeof HeadingLevel];
+  // 使用自定义样式 ID，样式由调用方通过 styles 参数传入
+  // 样式中应设置 color: "auto" 让 emoji 保持彩色
+  let styleId: string;
   switch (depth) {
     case 1:
-      headingLevel = HeadingLevel.TITLE;
+      styleId = "Title";
       break;
     case 2:
-      headingLevel = HeadingLevel.HEADING_1;
+      styleId = "Heading1";
       break;
     case 3:
-      headingLevel = HeadingLevel.HEADING_2;
+      styleId = "Heading2";
       break;
     case 4:
-      headingLevel = HeadingLevel.HEADING_3;
+      styleId = "Heading3";
       break;
     case 5:
-      headingLevel = HeadingLevel.HEADING_4;
+      styleId = "Heading4";
       break;
     case 6:
-      headingLevel = HeadingLevel.HEADING_5;
+      styleId = "Heading5";
       break;
     default:
-      headingLevel = HeadingLevel.HEADING_6;
+      styleId = "Heading6";
       break;
   }
   const nodes = convertNodes(children, ctx);
   return new Paragraph({
-    heading: headingLevel,
+    style: styleId,
     children: nodes,
   });
 };
@@ -750,9 +751,38 @@ const buildCode = ({
   lang: _lang,
   meta: _meta,
 }: mdast.Code): DocxContent => {
-  // FIXME: transform to text for now
+  // 将代码块中的每一行转换为带换行符的 TextRun
+  // 使用等宽字体和代码样式
+  const lines = value.split('\n');
+  const children: ParagraphChild[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    children.push(
+      new TextRun({
+        text: line,
+        font: 'Courier New', // 等宽字体
+        size: 20, // 10pt = 20 half-points
+        ...(i < lines.length - 1 ? { break: 1 } : {}), // 除了最后一行，都添加换行
+      })
+    );
+  }
+  
   return new Paragraph({
-    children: [buildText(value, {})],
+    children,
+    shading: {
+      fill: 'f5f5f5', // 浅灰色背景
+    },
+    spacing: {
+      before: 120, // 6pt = 120 twips
+      after: 120,
+    },
+    border: {
+      top: { color: 'e0e0e0', size: 1, style: 'single' as const },
+      bottom: { color: 'e0e0e0', size: 1, style: 'single' as const },
+      left: { color: 'e0e0e0', size: 1, style: 'single' as const },
+      right: { color: 'e0e0e0', size: 1, style: 'single' as const },
+    },
   });
 };
 
@@ -806,43 +836,13 @@ const buildInlineMath = (
   });
 };
 
-// 检测文本中是否包含 emoji
-const containsEmoji = (text: string): boolean => {
-  // 检测各种 emoji Unicode 范围
-  const emojiPatterns = [
-    /[\u{1F300}-\u{1F9FF}]/u,        // 杂项符号和象形文字
-    /[\u{2600}-\u{26FF}]/u,          // 杂项符号
-    /[\u{2700}-\u{27BF}]/u,          // 装饰符号
-    /[\u{1F1E0}-\u{1F1FF}]/u,        // 区域指示符号（国旗）
-    /[\u{1F600}-\u{1F64F}]/u,        // 表情符号
-    /[\u{1F680}-\u{1F6FF}]/u,        // 交通和地图符号
-    /[\u{1F900}-\u{1F9FF}]/u,        // 补充符号和象形文字
-    /[\u{1FA00}-\u{1FA6F}]/u,        // 象棋符号
-    /[\u{1FA70}-\u{1FAFF}]/u,        // 符号和象形文字扩展-A
-    /\u{200D}/u,                     // 零宽连接符（用于组合 emoji）
-    /[\u{20D0}-\u{20FF}]/u,          // 组合用符号
-    /[\u{FE00}-\u{FE0F}]/u,          // 变体选择符
-    /[\u{FE20}-\u{FE2F}]/u,          // 组合用半符号
-  ];
-  
-  return emojiPatterns.some(pattern => pattern.test(text));
-};
-
 const buildText = (text: string, deco: Decoration): DocxContent => {
-  const textRunOptions: any = {
+  return new TextRun({
     text,
     bold: deco.strong,
     italics: deco.emphasis,
     strike: deco.delete,
-  };
-
-  // 如果文本包含 emoji，设置支持 emoji 的字体
-  if (containsEmoji(text)) {
-    // 使用 Segoe UI Emoji，Word 会自动处理字体回退
-    textRunOptions.font = 'Segoe UI Emoji';
-  }
-
-  return new TextRun(textRunOptions);
+  });
 };
 
 const buildBreak = (_: mdast.Break): DocxContent => {
